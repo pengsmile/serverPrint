@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PrintHelper 测试页面</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      font-size: 24px;
+      color: #333;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px;
+      background: #f0f0f0;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #999;
+    }
+
+    .status-dot.connected {
+      background: #4caf50;
+    }
+
+    .status-text {
+      font-size: 14px;
+      color: #666;
+    }
+
+    .section {
+      margin-bottom: 20px;
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    label {
+      display: block;
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 6px;
+    }
+
+    select, input, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    select:focus, input:focus, textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    textarea {
+      min-height: 200px;
+      resize: vertical;
+      font-family: 'Consolas', 'Monaco', monospace;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #5a6fd6;
+    }
+
+    .btn-primary:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #666;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .result {
+      padding: 12px;
+      border-radius: 6px;
+      margin-top: 16px;
+      display: none;
+    }
+
+    .result.show {
+      display: block;
+    }
+
+    .result.success {
+      background: #e8f5e9;
+      border: 1px solid #4caf50;
+      color: #2e7d32;
+    }
+
+    .result.error {
+      background: #ffebee;
+      border: 1px solid #f44336;
+      color: #c62828;
+    }
+
+    .printer-info {
+      background: #f8f9fa;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+    }
+
+    .printer-info p {
+      font-size: 13px;
+      color: #666;
+      margin: 4px 0;
+    }
+
+    .sample-html {
+      background: #f8f9fa;
+      padding: 12px;
+      border-radius: 6px;
+      margin-top: 10px;
+      font-size: 12px;
+    }
+
+    .sample-html code {
+      display: block;
+      background: #fff;
+      padding: 8px;
+      border-radius: 4px;
+      margin-top: 8px;
+      white-space: pre-wrap;
+      font-family: 'Consolas', monospace;
+      cursor: pointer;
+    }
+
+    .sample-html code:hover {
+      background: #e8e8e8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>PrintHelper 测试页面</h1>
+
+    <div class="status-bar">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="status-text" id="statusText">正在连接...</span>
+    </div>
+
+    <div class="section">
+      <div class="section-title">打印机信息</div>
+      <div class="printer-info" id="printerInfo">
+        <p>加载中...</p>
+      </div>
+      <button class="btn btn-secondary" id="btnRefreshPrinters">刷新打印机列表</button>
+    </div>
+
+    <div class="section">
+      <div class="section-title">打印设置</div>
+      <label for="printerSelect">选择打印机</label>
+      <select id="printerSelect">
+        <option value="">使用默认打印机</option>
+      </select>
+
+      <label for="copiesInput" style="margin-top: 12px;">打印份数</label>
+      <input type="number" id="copiesInput" value="1" min="1" max="100" style="width: 100px;">
+    </div>
+
+    <div class="section">
+      <label for="htmlInput">HTML 内容</label>
+      <textarea id="htmlInput" placeholder="输入要打印的 HTML 内容..."></textarea>
+
+      <div class="sample-html">
+        <span>点击插入示例内容：</span>
+        <code id="sampleSimple" onclick="insertSample('simple')">简单文本</code>
+        <code id="sampleTable" onclick="insertSample('table')">表格</code>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="btnPrint" disabled>发送打印任务</button>
+    </div>
+
+    <div class="result" id="result"></div>
+  </div>
+
+  <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+  <script>
+    const socket = io('http://localhost:8765');
+    let printers = [];
+
+    let defaultPrinter = '';
+
+    // Connection status
+    socket.on('connect', () => {
+      document.getElementById('statusDot').classList.add('connected');
+      document.getElementById('statusText').textContent = '已连接到打印服务';
+      loadPrinters();
+      loadStatus();
+    });
+
+    socket.on('disconnect', () => {
+      document.getElementById('statusDot').classList.remove('connected');
+      document.getElementById('statusText').textContent = '连接已断开';
+    });
+
+    // Load printers
+    function loadPrinters() {
+      socket.emit('printers');
+    }
+
+    socket.on('printers', (printerList) => {
+      console.log('Received printers:', printerList);
+      // Handle null or undefined
+      if (!printerList || !Array.isArray(printerList)) {
+        printers = [];
+        document.getElementById('printerSelect').innerHTML = '<option value="">无可用打印机</option>';
+        return;
+      }
+
+      // Support both string array and object array formats
+      printers = printerList.map(p => {
+        if (typeof p === 'string') return p;
+        if (p && typeof p === 'object') return p.name || '';
+        return String(p);
+      });
+
+      const select = document.getElementById('printerSelect');
+      select.innerHTML = '<option value="">使用默认打印机</option>';
+
+      printerList.forEach(printer => {
+        if (!printer) return;
+
+        let name = '';
+        let isDefault = false;
+
+        if (typeof printer === 'string') {
+          name = printer;
+        } else if (typeof printer === 'object') {
+          name = printer.name || '';
+          isDefault = printer.isDefault === true;
+        }
+
+        if (!name) return;
+
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = isDefault ? `${name} (默认)` : name;
+        select.appendChild(option);
+      });
+
+      document.getElementById('btnPrint').disabled = false;
+    });
+
+    // Refresh printers button
+    document.getElementById('btnRefreshPrinters').addEventListener('click', () => {
+      loadPrinters();
+      loadStatus();
+    });
+
+    // Load status (includes default printer)
+    function loadStatus() {
+      socket.emit('status');
+    }
+
+    socket.on('status', (status) => {
+      defaultPrinter = status.defaultPrinter || '';
+      const printerCount = status.printers ? (Array.isArray(status.printers) ? status.printers.length : 0) : 0;
+      document.getElementById('printerInfo').innerHTML = `
+        <p>可用打印机数量: ${printerCount}</p>
+        <p>默认打印机: ${defaultPrinter || '未找到'}</p>
+      `;
+    });
+
+    // Print button
+    document.getElementById('btnPrint').addEventListener('click', () => {
+      const html = document.getElementById('htmlInput').value;
+      const printer = document.getElementById('printerSelect').value;
+      const copies = parseInt(document.getElementById('copiesInput').value) || 1;
+
+      if (!html.trim()) {
+        showResult('请输入 HTML 内容', false);
+        return;
+      }
+
+      const btn = document.getElementById('btnPrint');
+      btn.disabled = true;
+      btn.textContent = '正在打印...';
+
+      socket.emit('print', { html, printer, copies });
+    });
+
+    // Print result
+    socket.on('printResult', (result) => {
+      const btn = document.getElementById('btnPrint');
+      btn.disabled = false;
+      btn.textContent = '发送打印任务';
+
+      if (result.success) {
+        showResult(`打印成功！Job ID: ${result.jobId}`, true);
+      } else {
+        showResult(`打印失败: ${result.message}`, false);
+      }
+    });
+
+    // Show result
+    function showResult(message, isSuccess) {
+      const result = document.getElementById('result');
+      result.textContent = message;
+      result.className = `result show ${isSuccess ? 'success' : 'error'}`;
+    }
+
+    // Sample HTML
+    const samples = {
+      simple: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: 'Microsoft YaHei', sans-serif; padding: 20px; }
+    h1 { color: #333; }
+    p { color: #666; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>测试打印文档</h1>
+  <p>这是一份测试打印文档</p>
+  <p>打印时间: ${new Date().toLocaleString()}</p>
+</body>
+</html>`,
+      table: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: 'Microsoft YaHei', sans-serif; padding: 20px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background: #667eea; color: white; }
+    tr:nth-child(even) { background: #f9f9f9; }
+  </style>
+</head>
+<body>
+  <h1>订单明细表</h1>
+  <table>
+    <tr><th>序号</th><th>商品名称</th><th>数量</th><th>单价</th><th>小计</th></tr>
+    <tr><td>1</td><td>商品A</td><td>2</td><td>10.00</td><td>20.00</td></tr>
+    <tr><td>2</td><td>商品B</td><td>1</td><td>25.00</td><td>25.00</td></tr>
+    <tr><td>3</td><td>商品C</td><td>3</td><td>15.00</td><td>45.00</td></tr>
+  </table>
+  <p>打印时间: ${new Date().toLocaleString()}</p>
+</body>
+</html>`
+    };
+
+    function insertSample(type) {
+      document.getElementById('htmlInput').value = samples[type];
+    }
+  </script>
+</body>
+</html>
