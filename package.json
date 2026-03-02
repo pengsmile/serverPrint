@@ -9,10 +9,16 @@
     "build": "electron-builder --win --x64",
     "pack": "electron-builder --dir"
   },
-  "keywords": ["print", "socket", "electron", "windows-service"],
+  "keywords": [
+    "print",
+    "socket",
+    "electron",
+    "windows-service"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "dotenv": "^17.3.1",
     "electron-log": "^5.0.0",
     "node-printer": "^1.0.4",
     "socket.io": "^4.6.0"
@@ -38,7 +44,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },

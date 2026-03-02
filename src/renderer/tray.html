@@ -102,7 +102,7 @@
       white-space: nowrap;
     }
 
-    .printers-section {
+    .section {
       margin-bottom: 16px;
     }
 
@@ -111,9 +111,26 @@
       font-weight: 600;
       color: #333;
       margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
 
-    .printer-list {
+    .badge {
+      background: #e0e0e0;
+      color: #666;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: normal;
+    }
+
+    .badge.active {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .list-box {
       background: #f8f9fa;
       border-radius: 8px;
       padding: 12px;
@@ -121,7 +138,7 @@
       overflow-y: auto;
     }
 
-    .printer-item {
+    .list-item {
       display: flex;
       align-items: center;
       padding: 8px;
@@ -130,16 +147,17 @@
       margin-bottom: 6px;
     }
 
-    .printer-item:last-child {
+    .list-item:last-child {
       margin-bottom: 0;
     }
 
-    .printer-item .icon {
+    .list-item .icon {
       margin-right: 8px;
       color: #667eea;
+      font-size: 16px;
     }
 
-    .printer-item .name {
+    .list-item .name {
       flex: 1;
       font-size: 13px;
       color: #333;
@@ -148,7 +166,7 @@
       white-space: nowrap;
     }
 
-    .printer-item .default-badge {
+    .list-item .tag {
       font-size: 10px;
       background: #667eea;
       color: white;
@@ -156,9 +174,21 @@
       border-radius: 4px;
     }
 
+    .client-item .icon {
+      color: #4caf50;
+    }
+
+    .empty-state {
+      text-align: center;
+      color: #999;
+      font-size: 12px;
+      padding: 10px 0;
+    }
+
     .actions {
       display: flex;
       gap: 10px;
+      margin-top: 20px;
     }
 
     .btn {
@@ -193,11 +223,20 @@
       background: #e0e0e0;
     }
 
-    .footer {
-      text-align: center;
-      margin-top: 16px;
-      font-size: 11px;
-      color: #999;
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #ccc;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #bbb;
     }
   </style>
 </head>
@@ -222,15 +261,27 @@
         <span class="info-value" id="defaultPrinter">-</span>
       </div>
       <!-- <div class="info-row">
-        <span class="info-label">日志路径</span>
-        <span class="info-value" id="logPath" style="font-size: 11px;">-</span>
+        <span class="info-label">在线连接</span>
+        <span class="info-value" id="clientCount">0</span>
       </div> -->
     </div>
 
-    <div class="printers-section">
+    <div class="section">
+      <div class="section-title">
+        <span>已连接客户端</span>
+        <span class="badge" id="clientBadge">0</span>
+      </div>
+      <div class="list-box" id="clientList">
+        <div class="empty-state">
+          暂无客户端连接
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
       <div class="section-title">可用打印机</div>
-      <div class="printer-list" id="printerList">
-        <div class="printer-item">
+      <div class="list-box" id="printerList">
+        <div class="list-item">
           <span class="icon">🖨</span>
           <span class="name">加载中...</span>
         </div>
@@ -238,17 +289,10 @@
     </div>
 
     <div class="actions">
-      <!-- <button class="btn btn-secondary" id="btnLogFolder">
-        <span>📁</span> 日志文件夹
-      </button> -->
       <button class="btn btn-primary" id="btnOpenLog">
         <span>📄</span> 查看日志
       </button>
     </div>
-
-    <!-- <div class="footer">
-      双击托盘图标可隐藏此窗口
-    </div> -->
   </div>
 
   <script src="tray.js"></script>

@@ -3,7 +3,7 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const log = require('./logger');
-const { initServer } = require('./server');
+const { initServer, getConnectedClients } = require('./server');
 const config = require('./config');
 
 // Determine if running in development mode
@@ -181,8 +181,13 @@ function startServer() {
     res.end('PrintHelper Service Running');
   });
 
-  // Initialize Socket.io
-  initServer(httpServer);
+  // Initialize Socket.io with client change callback
+  initServer(httpServer, (clients) => {
+    // Notify renderer process about client changes
+    if (mainWindow) {
+      mainWindow.webContents.send('clients-changed', clients);
+    }
+  });
 
   // Start server
   const PORT = config.PORT;
@@ -205,19 +210,27 @@ function setupIPC() {
     const printer = require('./printer');
     const defaultPrinter = await printer.getDefaultPrinter();
     const printers = await printer.getPrinters();
+    const connectedClients = getConnectedClients();
+    
     return {
       running: true,
       version: '1.0.0',
       port: config.PORT,
       logPath: path.join(logDir, 'main.log'),
       defaultPrinter: defaultPrinter,
-      printers: printers
+      printers: printers,
+      clientCount: connectedClients.length,
+      clients: connectedClients
     };
   });
 
   ipcMain.handle('get-printers', async () => {
     const printer = require('./printer');
     return await printer.getPrinters();
+  });
+
+  ipcMain.handle('get-clients', async () => {
+    return getConnectedClients();
   });
 
   ipcMain.handle('open-log', async () => {

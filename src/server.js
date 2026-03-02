@@ -6,13 +6,19 @@ const config = require('./config');
 const PORT = config.PORT;
 
 let io;
+// 存储当前在线的客户端 Map: id -> { id, title, url, connectedAt }
+const connectedClients = new Map();
+let onClientChangeCallback = null;
 
 /**
  * Initialize Socket.io server
  * @param {http.Server} httpServer - HTTP server instance
+ * @param {Function} [onClientChange] - Callback when client connects/disconnects: (clients) => void
  * @returns {Server} Socket.io server instance
  */
-function initServer(httpServer) {
+function initServer(httpServer, onClientChange) {
+  onClientChangeCallback = onClientChange;
+
   io = new Server(httpServer, {
     cors: {
       origin: '*',
@@ -26,7 +32,28 @@ function initServer(httpServer) {
 
   // Handle socket connections
   io.on('connection', (socket) => {
-    log.info(`Client connected: ${socket.id}`);
+    // Parse client info from query
+    let clientInfo = {};
+    try {
+      if (socket.handshake.query && socket.handshake.query.clientInfo) {
+        clientInfo = JSON.parse(socket.handshake.query.clientInfo);
+      }
+    } catch (e) {
+      log.warn('Failed to parse client info:', e.message);
+    }
+
+    const clientData = {
+      id: socket.id,
+      title: clientInfo.title || 'Unknown Client',
+      url: clientInfo.url || '',
+      connectedAt: new Date().toISOString()
+    };
+
+    log.info(`Client connected: ${socket.id} (${clientData.title})`);
+    
+    // Add client and notify
+    connectedClients.set(socket.id, clientData);
+    notifyClientChange();
 
     // Handle print request
     socket.on('print', async (data) => {
@@ -84,6 +111,10 @@ function initServer(httpServer) {
     // Handle disconnection
     socket.on('disconnect', (reason) => {
       log.info(`Client disconnected: ${socket.id}, reason: ${reason}`);
+      
+      // Remove client and notify
+      connectedClients.delete(socket.id);
+      notifyClientChange();
     });
 
     // Handle errors
@@ -96,6 +127,15 @@ function initServer(httpServer) {
 }
 
 /**
+ * Notify callback about client changes
+ */
+function notifyClientChange() {
+  if (onClientChangeCallback) {
+    onClientChangeCallback(Array.from(connectedClients.values()));
+  }
+}
+
+/**
  * Get Socket.io server instance
  * @returns {Server|null} Socket.io server instance
  */
@@ -104,19 +144,15 @@ function getIO() {
 }
 
 /**
- * Broadcast message to all connected clients
- * @param {string} event - Event name
- * @param {any} data - Data to broadcast
+ * Get connected clients
+ * @returns {Array<Object>} List of client objects
  */
-function broadcast(event, data) {
-  if (io) {
-    io.emit(event, data);
-  }
+function getConnectedClients() {
+  return Array.from(connectedClients.values());
 }
 
 module.exports = {
   initServer,
   getIO,
-  broadcast,
-  PORT
+  getConnectedClients
 };
