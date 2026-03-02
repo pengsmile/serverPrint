@@ -22,7 +22,7 @@ async function loadStatus() {
 
     // Update info
     document.getElementById('version').textContent = status.version || '1.0.0';
-    document.getElementById('port').textContent = status.port || '8765';
+    document.getElementById('port').textContent = status.port || '-';
     document.getElementById('defaultPrinter').textContent = status.defaultPrinter || '未设置';
     // document.getElementById('logPath').textContent = status.logPath || '-';
 

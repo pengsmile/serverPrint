@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const log = require('./logger');
 const { initServer } = require('./server');
+const config = require('./config');
 
 // Determine if running in development mode
 const isDev = !app.isPackaged;
@@ -119,7 +120,7 @@ function createTray() {
           enabled: false
         },
         {
-          label: `端口: 8765`,
+          label: `端口: ${config.PORT}`,
           enabled: false
         }
       ]
@@ -184,7 +185,7 @@ function startServer() {
   initServer(httpServer);
 
   // Start server
-  const PORT = process.env.PORT || 8765;
+  const PORT = config.PORT;
   httpServer.listen(PORT, () => {
     log.info('========================================');
     log.info('PrintHelper Service Started');
@@ -207,7 +208,7 @@ function setupIPC() {
     return {
       running: true,
       version: '1.0.0',
-      port: 8765,
+      port: config.PORT,
       logPath: path.join(logDir, 'main.log'),
       defaultPrinter: defaultPrinter,
       printers: printers

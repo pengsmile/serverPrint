@@ -245,7 +245,10 @@
 
   <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
   <script>
-    const socket = io('http://localhost:8765');
+    // Allow port configuration via query parameter: ?port=8765
+    const urlParams = new URLSearchParams(window.location.search);
+    const port = urlParams.get('port') || 18765;
+    const socket = io(`http://localhost:${port}`);
     let printers = [];
 
     let defaultPrinter = '';

@@ -7,7 +7,9 @@ const log = require('./logger');
  */
 function execPowerShell(command) {
   return new Promise((resolve, reject) => {
-    exec(`powershell -Command "${command}"`, { encoding: 'utf8' }, (error, stdout, stderr) => {
+    // Force UTF-8 encoding for PowerShell output to handle non-ASCII characters correctly
+    const psCommand = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ${command}`;
+    exec(`powershell -Command "${psCommand}"`, { encoding: 'utf8' }, (error, stdout, stderr) => {
       if (error) {
         reject(error);
       } else {

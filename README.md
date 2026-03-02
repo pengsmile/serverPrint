@@ -36,7 +36,7 @@ npm install
 npm run dev
 ```
 
-启动后会监听 Socket.io 服务端口 `8765`（可通过 `PORT` 环境变量覆盖）。
+启动后会监听 Socket.io 服务端口 `18765`（可通过 `.env` 环境变量覆盖）。
 
 ## 打包
 

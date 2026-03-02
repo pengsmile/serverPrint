@@ -1,8 +1,9 @@
 const { Server } = require('socket.io');
 const printer = require('./printer');
 const log = require('./logger');
+const config = require('./config');
 
-const PORT = process.env.PORT || 8765;
+const PORT = config.PORT;
 
 let io;
 
