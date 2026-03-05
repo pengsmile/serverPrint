@@ -9,6 +9,9 @@ const config = require('./config');
 // Determine if running in development mode
 const isDev = !app.isPackaged;
 
+// Set App User Model ID for Windows
+app.setAppUserModelId('com.printhelper.app');
+
 // Global references
 let tray = null;
 let mainWindow = null;
@@ -76,15 +79,13 @@ function createWindow() {
  * Create system tray
  */
 function createTray() {
-  // Create tray icon - use default if icon not found
   let trayIcon;
   const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
 
   if (fs.existsSync(iconPath)) {
     trayIcon = nativeImage.createFromPath(iconPath);
   } else {
-    // Create a simple 16x16 icon programmatically
-    trayIcon = nativeImage.createEmpty();
+    // trayIcon = nativeImage.createEmpty();
   }
 
   tray = new Tray(trayIcon);
@@ -137,7 +138,7 @@ function createTray() {
 
   tray.setContextMenu(contextMenu);
 
-  // Double click to show window
+  // 双击托盘图标打开主界面
   tray.on('double-click', () => {
     if (mainWindow) {
       mainWindow.show();
@@ -249,42 +250,7 @@ function setupIPC() {
   log.info('IPC handlers registered');
 }
 
-// App ready
-app.whenReady().then(() => {
-  log.info('App ready, starting PrintHelper...');
 
-  // Remove native menu bar
-  Menu.setApplicationMenu(null);
-
-  // Check if started with --hidden flag
-  const startHidden = process.argv.includes('--hidden');
-
-  // Setup IPC
-  setupIPC();
-
-  // Create window (but don't show if started hidden)
-  createWindow();
-
-  // Create tray
-  createTray();
-
-  // Start Socket server
-  startServer();
-
-  // Configure auto-start
-  configureAutoStart();
-
-  // Show window if not started hidden
-  if (!startHidden && mainWindow) {
-    mainWindow.show();
-  }
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
-});
 
 // Quit when all windows are closed (except on macOS)
 app.on('window-all-closed', () => {
@@ -305,19 +271,56 @@ app.on('before-quit', () => {
   }
 });
 
-// Handle second instance
+// Ensure single instance
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
   app.quit();
 } else {
   app.on('second-instance', (event, commandLine, workingDirectory) => {
-    // Focus the main window if user tries to open another instance
+    // Someone tried to run a second instance, we should focus our window.
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
+      if (!mainWindow.isVisible()) mainWindow.show();
       mainWindow.focus();
     }
+  });
+
+  // App ready
+  app.whenReady().then(() => {
+    log.info('App ready, starting PrintHelper...');
+
+    // Remove native menu bar
+    Menu.setApplicationMenu(null);
+
+    // Check if started with --hidden flag
+    const startHidden = process.argv.includes('--hidden');
+
+    // Setup IPC
+    setupIPC();
+
+    // Create window (but don't show if started hidden)
+    createWindow();
+
+    // Create tray
+    createTray();
+
+    // Start Socket server
+    startServer();
+
+    // Configure auto-start
+    configureAutoStart();
+
+    // Show window if not started hidden
+    if (!startHidden && mainWindow) {
+      mainWindow.show();
+    }
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
   });
 }
 

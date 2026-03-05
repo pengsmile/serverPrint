@@ -29,7 +29,7 @@
   },
   "build": {
     "appId": "com.printhelper.app",
-    "productName": "打印服务",
+    "productName": "打印助手",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -37,7 +37,8 @@
     "files": [
       "src/**/*",
       "assets/**/*",
-      "package.json"
+      "package.json",
+      ".env"
     ],
     "win": {
       "icon": "assets/icon.png",
@@ -57,7 +58,7 @@
       "deleteAppDataOnUninstall": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "PrintHelper"
+      "shortcutName": "打印助手"
     }
   }
 }

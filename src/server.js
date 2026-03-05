@@ -1,4 +1,5 @@
 const { Server } = require('socket.io');
+const { Notification } = require('electron');
 const printer = require('./printer');
 const log = require('./logger');
 const config = require('./config');
@@ -64,11 +65,25 @@ function initServer(httpServer, onClientChange) {
         const result = await printer.printHTML({
           html: data.html,
           printer: data.printer,
-          copies: data.copies || 1
+          copies: data.copies || 1,
+          pageSize: data.pageSize,
+          margins: data.margins
         });
 
         socket.emit('printResult', result);
         log.info(`Print result for ${socket.id}:`, result);
+
+        if (result.success) {
+          new Notification({
+            title: '打印任务已发送',
+            body: `文档已发送至打印机: ${result.printer || data.printer || '默认打印机'}`
+          }).show();
+        } else {
+          new Notification({
+            title: '打印任务失败',
+            body: `打印机: ${result.printer || data.printer || '默认打印机'}`
+          }).show();
+        }
       } catch (error) {
         const errorResult = {
           success: false,
@@ -84,6 +99,13 @@ function initServer(httpServer, onClientChange) {
       const printers = await printer.getPrinters();
       socket.emit('printers', printers);
       log.info(`Sent printer list to ${socket.id}:`, printers);
+    });
+
+    // Handle raw printer list request
+    socket.on('rawPrinters', async () => {
+      const rawPrinters = await printer.getPrintersAsync();
+      socket.emit('rawPrinters', rawPrinters);
+      log.info(`Sent raw printer list to ${socket.id}`);
     });
 
     // Handle status request
@@ -106,6 +128,13 @@ function initServer(httpServer, onClientChange) {
       const status = await printer.getPrinterStatus(printerName);
       socket.emit('printerStatus', status);
       log.info(`Sent printer status for ${printerName}:`, status);
+    });
+
+    // Handle printer papers request
+    socket.on('printerPapers', async (printerName) => {
+      const papers = await printer.getPrinterPapers(printerName);
+      socket.emit('printerPapers', papers);
+      log.info(`Sent papers for ${printerName}:`, papers);
     });
 
     // Handle disconnection

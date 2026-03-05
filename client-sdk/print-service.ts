@@ -20,6 +20,19 @@ export interface PrintResult {
   [key: string]: any;
 }
 
+export interface PrintOptions {
+  printer?: string;
+  copies?: number;
+  pageSize?: string | { width: number; height: number };
+  margins?: {
+    marginType?: 'default' | 'none' | 'printableArea' | 'custom';
+    top?: number;
+    bottom?: number;
+    left?: number;
+    right?: number;
+  };
+}
+
 export interface PrinterStatus {
   exists: boolean;
   status?: string;
@@ -39,8 +52,9 @@ declare global {
 class PrintService {
   private url: string;
   private socket: Socket | null;
-  private isConnected: boolean;
+  isConnected: boolean;
   private connectPromise: Promise<void> | null;
+  init: any;
 
   constructor(url = 'http://localhost:18765') {
     this.url = url;
@@ -81,7 +95,7 @@ class PrintService {
     this.connectPromise = new Promise((resolve, reject) => {
       const metadata = {
         title: typeof document !== 'undefined' ? document.title : '',
-        url: typeof location !== 'undefined' ? location.href : '',
+        url: typeof location !== 'undefined' ? location.origin : '',
         userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
       };
       // 使用 import 引入的 io
@@ -146,7 +160,9 @@ class PrintService {
   /**
    * 核心方法：打印 HTML
    */
-  async print(html: string, printerName = '', copies = 1): Promise<PrintResult> {
+  async print(html: string, options: PrintOptions = {}): Promise<PrintResult> {
+    const { printer: printerName = '', copies = 1, pageSize, margins } = options;
+
     // 尝试连接（如果未连接）
     this.connect();
 
@@ -170,7 +186,13 @@ class PrintService {
 
     return new Promise((resolve, reject) => {
       // 生成唯一 Request ID 避免并发混淆（可选，这里简单处理）
-      this.socket?.emit('print', { html, printer: printerName, copies });
+      this.socket?.emit('print', {
+        html,
+        printer: printerName,
+        copies,
+        pageSize,
+        margins,
+      });
 
       const handler = (result: PrintResult) => {
         this.socket?.off('printResult', handler);
@@ -210,6 +232,29 @@ class PrintService {
   }
 
   /**
+   * 获取原始打印机列表 (包含 Electron 完整信息)
+   */
+  async getPrintersAsync(): Promise<any[]> {
+    this.connect();
+
+    try {
+      await this.waitForConnection(2000);
+    } catch (e) {
+      console.warn('[PrintService] Failed to connect for raw printer list');
+      return [];
+    }
+
+    if (!this.socket) return [];
+
+    return new Promise((resolve) => {
+      // 推荐的严谨写法
+      this.socket?.once('rawPrinters', (list: any[]) => resolve(list));
+      this.socket?.emit('rawPrinters');
+      setTimeout(() => resolve([]), 2000);
+    });
+  }
+
+  /**
    * 获取服务状态
    * @returns {Promise<Object>}
    */
@@ -225,10 +270,10 @@ class PrintService {
     if (!this.socket) return null;
 
     return new Promise((resolve) => {
-      this.socket?.emit('status');
       this.socket?.once('status', (status: PrinterStatus) => {
         resolve(status);
       });
+      this.socket?.emit('status');
       setTimeout(() => resolve(null), 3000);
     });
   }
@@ -271,9 +316,27 @@ class PrintService {
   }
 
   /**
-   * 等待连接成功
-   * @private
+   * 获取打印机支持的纸张列表
+   * @param {string} printerName 打印机名称
    */
+  async getPrinterPapers(printerName: string): Promise<string[]> {
+    this.connect();
+
+    try {
+      await this.waitForConnection(2000);
+    } catch (e) {
+      console.warn('[PrintService] Failed to connect for papers');
+      return [];
+    }
+
+    if (!this.socket) return [];
+
+    return new Promise((resolve) => {
+      this.socket?.once('printerPapers', (list: string[]) => resolve(list));
+      this.socket?.emit('printerPapers', printerName);
+      setTimeout(() => resolve([]), 5000); // 纸张查询可能较慢，给5秒
+    });
+  }
   private waitForConnection(timeout = 5000): Promise<void> {
     if (this.isConnected && this.socket && this.socket.connected) {
       return Promise.resolve();
@@ -314,14 +377,31 @@ class PrintService {
 // 创建全局单例
 const printService = new PrintService();
 
+/**
+ * 显式初始化函数（防止 Tree Shaking）
+ * 在项目入口调用：import { printService } from './print-service'; printService.init();
+ */
+(printService as any).init = () => {
+  console.info('[PrintService] SDK initialized');
+  return printService;
+};
+
 // 1. 默认导出单例 (ES Module)
+export { printService };
 export default printService;
 
-// 2. 挂载到 window (浏览器环境)
+// 2. 挂载到 window (浏览器环境) - 增加更积极的副作用标记
 if (typeof window !== 'undefined') {
-  // @ts-ignore
-  window.PrintService = PrintService; // 导出类，允许 new PrintService('other-url')
-  window.printService = printService; // 导出单例，方便直接使用
+  (window as any).PrintService = PrintService;
+  (window as any).printService = printService;
+
+  // 打印一个醒目的 Log，确保开发者知道它加载了
+  console.log(
+    '%c 🖨️ PrintService %c Loaded %c',
+    'background:#4caf50 ; padding: 1px; border-radius: 3px 0 0 3px;  color: #fff',
+    'background:#1976d2 ; padding: 1px; border-radius: 0 3px 3px 0;  color: #fff',
+    'background:transparent',
+  );
 }
 
 // 3. CommonJS 兼容导出

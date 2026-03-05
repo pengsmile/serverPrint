@@ -223,6 +223,45 @@
 
       <label for="copiesInput" style="margin-top: 12px;">打印份数</label>
       <input type="number" id="copiesInput" value="1" min="1" max="100" style="width: 100px;">
+
+      <label for="pageSizeSelect" style="margin-top: 12px;">纸张大小</label>
+      <select id="pageSizeSelect">
+        <option value="A4">A4</option>
+        <option value="A3">A3</option>
+        <option value="A5">A5</option>
+        <option value="Legal">Legal</option>
+        <option value="Letter">Letter</option>
+        <option value="Tabloid">Tabloid</option>
+      </select>
+
+      <label for="marginTypeSelect" style="margin-top: 12px;">边距类型</label>
+      <select id="marginTypeSelect">
+        <option value="default">默认 (Default)</option>
+        <option value="none">无边距 (None)</option>
+        <option value="printableArea">可打印区域 (Printable Area)</option>
+        <option value="custom">自定义 (Custom)</option>
+      </select>
+
+      <div id="customMargins" style="display: none; margin-top: 12px; border: 1px solid #eee; padding: 10px; border-radius: 6px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div>
+            <label>上 (Top) px</label>
+            <input type="number" id="marginTop" value="0">
+          </div>
+          <div>
+            <label>下 (Bottom) px</label>
+            <input type="number" id="marginBottom" value="0">
+          </div>
+          <div>
+            <label>左 (Left) px</label>
+            <input type="number" id="marginLeft" value="0">
+          </div>
+          <div>
+            <label>右 (Right) px</label>
+            <input type="number" id="marginRight" value="0">
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="section">
@@ -339,6 +378,19 @@
       const html = document.getElementById('htmlInput').value;
       const printer = document.getElementById('printerSelect').value;
       const copies = parseInt(document.getElementById('copiesInput').value) || 1;
+      const pageSize = document.getElementById('pageSizeSelect').value;
+      const marginType = document.getElementById('marginTypeSelect').value;
+
+      const margins = {
+        marginType: marginType
+      };
+
+      if (marginType === 'custom') {
+        margins.top = parseInt(document.getElementById('marginTop').value) || 0;
+        margins.bottom = parseInt(document.getElementById('marginBottom').value) || 0;
+        margins.left = parseInt(document.getElementById('marginLeft').value) || 0;
+        margins.right = parseInt(document.getElementById('marginRight').value) || 0;
+      }
 
       if (!html.trim()) {
         showResult('请输入 HTML 内容', false);
@@ -349,7 +401,12 @@
       btn.disabled = true;
       btn.textContent = '正在打印...';
 
-      socket.emit('print', { html, printer, copies });
+      socket.emit('print', { html, printer, copies, pageSize, margins });
+    });
+
+    // Toggle custom margins
+    document.getElementById('marginTypeSelect').addEventListener('change', (e) => {
+      document.getElementById('customMargins').style.display = e.target.value === 'custom' ? 'block' : 'none';
     });
 
     // Print result
