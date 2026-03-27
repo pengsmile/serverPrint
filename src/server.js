@@ -3,6 +3,7 @@ const { Notification } = require('electron');
 const printer = require('./printer');
 const log = require('./logger');
 const config = require('./config');
+const packageJson = require('../package.json');
 
 const PORT = config.PORT;
 
@@ -76,11 +77,11 @@ function initServer(httpServer, onClientChange) {
         if (result.success) {
           new Notification({
             title: '打印任务已发送',
-            body: `文档已发送至打印机: ${result.printer || data.printer || '默认打印机'}`
+            body: `已发送至打印机: ${result.printer || data.printer || '默认打印机'}`
           }).show();
         } else {
           new Notification({
-            title: '打印任务失败',
+            title: '打印任务失败，请检查打印机',
             body: `打印机: ${result.printer || data.printer || '默认打印机'}`
           }).show();
         }
@@ -114,7 +115,7 @@ function initServer(httpServer, onClientChange) {
       const printers = await printer.getPrinters();
       const status = {
         running: true,
-        version: '1.0.0',
+        version: packageJson.version,
         defaultPrinter: defaultPrinter,
         printers: printers,
         port: PORT

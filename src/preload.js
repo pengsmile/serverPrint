@@ -26,6 +26,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Open log folder
   openLogFolder: () => ipcRenderer.invoke('open-log-folder'),
 
+  // Update APIs
+  getUpdateState: () => ipcRenderer.invoke('get-update-state'),
+  checkUpdate: () => ipcRenderer.invoke('check-update'),
+  downloadUpdate: () => ipcRenderer.invoke('download-update'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  onUpdateStateChanged: (callback) => {
+    const subscription = (event, value) => callback(value);
+    ipcRenderer.on('update-state-changed', subscription);
+    return () => ipcRenderer.removeListener('update-state-changed', subscription);
+  },
+
   // Platform info
   platform: process.platform
 });
