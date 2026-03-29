@@ -1,4 +1,4 @@
-const {
+﻿const {
   app,
   BrowserWindow,
   Tray,
@@ -6,7 +6,6 @@ const {
   ipcMain,
   shell,
   nativeImage,
-  dialog,
 } = require("electron");
 const http = require("http");
 const path = require("path");
@@ -27,7 +26,7 @@ app.setAppUserModelId("com.printhelper.app");
 let tray = null;
 let mainWindow = null;
 let httpServer = null;
-let forceUpdatePending = false;
+let promptedForceInstallVersion = "";
 
 // Log directory
 const logDir = path.join(app.getPath("userData"), "logs");
@@ -92,20 +91,11 @@ async function createWindow() {
     mainWindow.webContents.openDevTools({ mode: "detach" });
   }
 
-  // Hide instead of close (block close during force update)
+  // Hide instead of close
   mainWindow.on("close", (event) => {
     if (!app.isQuitting) {
       event.preventDefault();
-      if (forceUpdatePending) {
-        dialog.showMessageBoxSync(mainWindow, {
-          type: "warning",
-          title: "强制更新",
-          message: "当前版本需要强制更新，请点击立即安装完成更新。",
-          buttons: ["确定"],
-        });
-      } else {
-        mainWindow.hide();
-      }
+      mainWindow.hide();
     }
   });
 
@@ -171,20 +161,6 @@ function createTray() {
     {
       label: "退出",
       click: () => {
-        if (forceUpdatePending) {
-          // Block tray quit during force update, show window instead
-          if (mainWindow) {
-            mainWindow.show();
-            mainWindow.focus();
-          }
-          dialog.showMessageBox(mainWindow, {
-            type: "warning",
-            title: "强制更新",
-            message: "当前版本需要强制更新，请点击立即安装完成更新后才能退出。",
-            buttons: ["确定"],
-          });
-          return;
-        }
         app.isQuitting = true;
         app.quit();
       },
@@ -315,10 +291,13 @@ function setupIPC() {
   });
 
   ipcMain.handle("install-update", async () => {
-    // Clear force update flag before installing to prevent before-quit from blocking exit
-    forceUpdatePending = false;
-    app.isQuitting = true;
-    return updater.installUpdate();
+    try {
+      const result = await updater.installUpdate();
+      return result;
+    } catch (error) {
+      log.error("Install update failed:", error.message);
+      throw error;
+    }
   });
 
   log.info("IPC handlers registered");
@@ -331,18 +310,8 @@ app.on("window-all-closed", () => {
   }
 });
 
-// Before quit (block quit during force update unless installing)
+// Before quit
 app.on("before-quit", (event) => {
-  if (forceUpdatePending && !app.isQuitting) {
-    event.preventDefault();
-    log.info("Quit blocked: force update pending");
-    if (mainWindow) {
-      mainWindow.show();
-      mainWindow.focus();
-    }
-    return;
-  }
-
   app.isQuitting = true;
   log.info("Application quitting...");
 
@@ -386,16 +355,18 @@ if (!gotTheLock) {
         mainWindow.webContents.send("update-state-changed", updateState);
       }
     });
-
-    // Handle force update: show window and block quit
+    // Handle force update: auto-install after download completes.
     updater.setForceUpdateListener((updateState) => {
-      forceUpdatePending = true;
-      log.info("Force update ready, showing main window for installation...");
-
-      if (mainWindow) {
-        mainWindow.show();
-        mainWindow.focus();
+      if (promptedForceInstallVersion === updateState.latestVersion) {
+        return;
       }
+
+      promptedForceInstallVersion = updateState.latestVersion;
+      log.info("Force update downloaded, starting auto-install...");
+
+      updater.installUpdate().catch((err) => {
+        log.error("Force update auto-install failed:", err.message);
+      });
     });
 
     // Create window (but don't show if started hidden)
@@ -412,7 +383,7 @@ if (!gotTheLock) {
     // Configure auto-start
     configureAutoStart();
 
-    // Clean up old installer files from previous updates
+    // Clean up any leftover installer files from previous updates
     updater.cleanDownloadDirectory();
 
     if (config.UPDATE_ENABLED && config.UPDATE_AUTO_CHECK_ON_START) {
@@ -426,6 +397,8 @@ if (!gotTheLock) {
     // Show window if not started hidden
     if (!startHidden && mainWindow) {
       mainWindow.show();
+      mainWindow.focus();
+      app.focus({ steal: true });
     }
 
     app.on("activate", () => {

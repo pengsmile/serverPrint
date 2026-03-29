@@ -1,6 +1,6 @@
 {
   "name": "print-helper",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Windows printing service with Socket.io communication - Electron based",
   "main": "src/index.js",
   "scripts": {
@@ -60,8 +60,8 @@
       ]
     },
     "nsis": {
-      "oneClick": false,
-      "perMachine": true,
+      "oneClick": true,
+      "perMachine": false,
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": true,
       "createDesktopShortcut": true,

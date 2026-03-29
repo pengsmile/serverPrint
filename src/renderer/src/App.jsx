@@ -25,6 +25,8 @@ const defaultUpdateState = {
 export default function App() {
   const [status, setStatus] = useState(defaultStatus);
   const [updateState, setUpdateState] = useState(defaultUpdateState);
+  const [installError, setInstallError] = useState("");
+  const [isInstalling, setIsInstalling] = useState(false);
 
   useEffect(() => {
     let removeClientsListener = null;
@@ -52,6 +54,14 @@ export default function App() {
 
       removeUpdateListener = api.onUpdateStateChanged((nextState) => {
         setUpdateState((prev) => ({ ...prev, ...nextState }));
+        if (!["downloaded", "installing"].includes(nextState.status)) {
+          setInstallError("");
+          setIsInstalling(false);
+        }
+
+        if (nextState.status === "installing") {
+          setIsInstalling(true);
+        }
       });
     }
 
@@ -69,6 +79,33 @@ export default function App() {
     { label: "默认打印机", value: status.defaultPrinter || "未设置" },
   ];
 
+  async function handleCheck() {
+    setInstallError("");
+    return window.electronAPI?.checkUpdate();
+  }
+
+  async function handleDownload() {
+    setInstallError("");
+    return window.electronAPI?.downloadUpdate();
+  }
+
+  async function handleInstall() {
+    const api = window.electronAPI;
+    if (!api || isInstalling) return;
+
+    setInstallError("");
+    setIsInstalling(true);
+
+    try {
+      await api.installUpdate();
+    } catch (error) {
+      const message = error?.message || "启动安装程序失败，请重试。";
+      console.error("Failed to start installer", error);
+      setInstallError(message);
+      setIsInstalling(false);
+    }
+  }
+
   return (
     <div className="app-shell">
       <div className="hero">
@@ -76,7 +113,7 @@ export default function App() {
           <p className="eyebrow">Print Service Console</p>
           <h1>打印程序</h1>
           <p className="hero-copy">托盘服务、打印状态和版本更新统一收敛到一个更易维护的界面里。</p>
-          {/* <h1>这是更新后的1.0.2版本</h1> */}
+          <h1>这是更新后的1.0.2版本</h1>
         </div>
         <div className="hero-pill">服务运行中</div>
       </div>
@@ -85,9 +122,11 @@ export default function App() {
 
       <UpdatePanel
         updateState={updateState}
-        onCheck={() => window.electronAPI?.checkUpdate()}
-        onDownload={() => window.electronAPI?.downloadUpdate()}
-        onInstall={() => window.electronAPI?.installUpdate()}
+        installError={installError}
+        isInstalling={isInstalling}
+        onCheck={handleCheck}
+        onDownload={handleDownload}
+        onInstall={handleInstall}
       />
 
       <div className="grid-layout">

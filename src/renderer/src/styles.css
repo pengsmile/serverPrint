@@ -184,6 +184,26 @@ textarea {
   word-break: break-word;
 }
 
+.update-install-hint {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.update-install-error {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .progress {
   display: none;
   overflow: hidden;
@@ -223,7 +243,7 @@ textarea {
   border: 1px solid rgba(226, 232, 240, 0.9);
 }
 
-.list-item + .list-item {
+.list-item+.list-item {
   margin-top: 10px;
 }
 
@@ -341,6 +361,7 @@ textarea {
 }
 
 @media (max-width: 860px) {
+
   .grid-layout,
   .info-grid {
     grid-template-columns: 1fr;

@@ -3,7 +3,7 @@ const path = require("path");
 const crypto = require("crypto");
 const http = require("http");
 const https = require("https");
-const { app, shell } = require("electron");
+const { app } = require("electron");
 const log = require("./logger");
 const config = require("./config");
 const packageJson = require("../package.json");
@@ -18,6 +18,7 @@ const state = {
   isForceUpdate: false,
   releaseDate: "",
   fileSize: null,
+  expectedSha512: "",
   downloadUrl: "",
   fileName: "",
   downloadedFilePath: "",
@@ -31,7 +32,12 @@ let stateListener = null;
 let forceUpdateListener = null;
 let activeCheckPromise = null;
 let activeDownloadPromise = null;
+let isInstalling = false;
 
+/**
+ * 合并更新状态并触发状态监听器。
+ * @param {Partial<typeof state>} patch - 要合并的状态片段
+ */
 function setState(patch) {
   Object.assign(state, patch);
   state.checkedAt = new Date().toISOString();
@@ -41,18 +47,36 @@ function setState(patch) {
   }
 }
 
+/**
+ * 返回当前状态的浅拷贝。
+ * @returns {typeof state}
+ */
 function getState() {
   return { ...state };
 }
 
+/**
+ * 注册状态变更监听器，每次调用 setState 后触发。
+ * @param {(state: typeof state) => void} listener
+ */
 function setStateListener(listener) {
   stateListener = listener;
 }
 
+/**
+ * 注册强制更新监听器，强制更新下载完成后由 checkForUpdates 触发。
+ * @param {(state: typeof state) => void} listener
+ */
 function setForceUpdateListener(listener) {
   forceUpdateListener = listener;
 }
 
+/**
+ * 比较两个语义化版本号字符串。
+ * @param {string} a
+ * @param {string} b
+ * @returns {1 | 0 | -1} a > b 返回 1，a === b 返回 0，a < b 返回 -1
+ */
 function compareVersions(a, b) {
   const left = String(a || "")
     .split(".")
@@ -72,6 +96,11 @@ function compareVersions(a, b) {
   return 0;
 }
 
+/**
+ * 构造 HTTP 请求头，若配置了鉴权 Token 则自动附加。
+ * @param {Record<string, string>} [extraHeaders={}] - 额外请求头
+ * @returns {Record<string, string>}
+ */
 function buildHeaders(extraHeaders = {}) {
   const headers = {
     Accept: "application/json",
@@ -81,12 +110,24 @@ function buildHeaders(extraHeaders = {}) {
   if (config.UPDATE_REQUEST_TOKEN) {
     const headerName = config.UPDATE_REQUEST_TOKEN_HEADER || "Authorization";
     const prefix = config.UPDATE_REQUEST_TOKEN_PREFIX || "";
-    headers[headerName] = `${prefix} ${config.UPDATE_REQUEST_TOKEN}`;
+    const normalizedPrefix = prefix
+      ? /\s$/.test(prefix)
+        ? prefix
+        : `${prefix} `
+      : "";
+    headers[headerName] = `${normalizedPrefix}${config.UPDATE_REQUEST_TOKEN}`;
   }
 
   return headers;
 }
 
+/**
+ * 发起 HTTP/HTTPS GET 请求并解析 JSON 响应，支持自动重定向。
+ * @param {string} url - 请求地址
+ * @param {{ headers?: Record<string, string> }} [options={}]
+ * @param {number} [redirectCount=0] - 当前重定向次数（内部递归使用）
+ * @returns {Promise<any>}
+ */
 function requestJson(url, options = {}, redirectCount = 0) {
   return new Promise((resolve, reject) => {
     const requestUrl = new URL(url);
@@ -161,6 +202,12 @@ function requestJson(url, options = {}, redirectCount = 0) {
   });
 }
 
+/**
+ * 将附件字段标准化为统一格式 { url, name, size }。
+ * 支持字符串 URL 或对象格式。
+ * @param {string | object | null} entry
+ * @returns {{ url: string, name: string, size: number | null } | null}
+ */
 function normalizeAttachmentEntry(entry) {
   if (!entry) return null;
 
@@ -185,6 +232,11 @@ function normalizeAttachmentEntry(entry) {
   return { url, name, size };
 }
 
+/**
+ * 从更新记录中解析下载地址、文件名和文件大小。
+ * @param {object} record - 服务端返回的更新记录
+ * @returns {{ downloadUrl: string, fileName: string, fileSize: number | null, hasPackage: boolean }}
+ */
 function resolveDownloadInfo(record) {
   const attachmentValue = record.path || "";
   let attachment = null;
@@ -224,6 +276,58 @@ function resolveDownloadInfo(record) {
   };
 }
 
+/**
+ * 判断当前状态是否属于未完成的强制更新（仅内部使用）。
+ * @param {typeof state} [updateState]
+ * @returns {boolean}
+ */
+function shouldBlockForForceUpdate(updateState = state) {
+  return Boolean(
+    updateState.isForceUpdate &&
+      updateState.latestVersion &&
+      ["available", "downloading", "downloaded", "error"].includes(
+        updateState.status,
+      ),
+  );
+}
+
+/**
+ * 若文件存在则删除，错误时仅记录日志不抛出。
+ * @param {string} filePath
+ */
+function removeFileIfExists(filePath) {
+  if (!filePath) return;
+
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (error) {
+    log.error(`Failed to remove file ${filePath}:`, error.message);
+  }
+}
+
+/**
+ * 根据版本号和原始文件名生成本地安装包文件名。
+ * @param {string} version
+ * @param {string} [originalFileName=""]
+ * @returns {string} 例如 "PrintHelper-1.2.3.exe"
+ */
+function buildLocalInstallerFileName(version, originalFileName = "") {
+  const normalizedVersion = String(version || "update").replace(
+    /[^0-9A-Za-z._-]+/g,
+    "-",
+  );
+  const extension = path.extname(String(originalFileName || "").trim()) || ".exe";
+
+  return `PrintHelper-${normalizedVersion}${extension}`;
+}
+
+/**
+ * 从服务端获取最新的更新记录（列表第一条）。
+ * @returns {Promise<object | null>} 更新记录对象，无记录时返回 null
+ * @throws {Error} 更新功能未启用或地址未配置时抛出
+ */
 async function fetchLatestRecord() {
   if (!config.UPDATE_ENABLED) {
     throw new Error("更新功能已禁用");
@@ -243,6 +347,13 @@ async function fetchLatestRecord() {
   return list[0];
 }
 
+/**
+ * 检查是否有新版本可用，并更新内部状态。
+ * 若存在强制更新则自动触发下载流程。
+ * 并发调用时会复用同一个 Promise。
+ * @param {{ source?: 'manual' | 'startup' }} [options]
+ * @returns {Promise<typeof state>}
+ */
 async function checkForUpdates({ source = "manual" } = {}) {
   if (activeCheckPromise) {
     return activeCheckPromise;
@@ -266,6 +377,7 @@ async function checkForUpdates({ source = "manual" } = {}) {
           isForceUpdate: false,
           releaseDate: "",
           fileSize: null,
+          expectedSha512: "",
           downloadUrl: "",
           fileName: "",
           downloadedFilePath: "",
@@ -297,6 +409,7 @@ async function checkForUpdates({ source = "manual" } = {}) {
           releaseDate:
             record.releaseDate || record.updatedAt || record.createdAt || "",
           fileSize,
+          expectedSha512: String(record.sha512 || "").trim(),
           downloadUrl,
           fileName,
           downloadedFilePath: "",
@@ -325,6 +438,7 @@ async function checkForUpdates({ source = "manual" } = {}) {
         releaseDate:
           record.releaseDate || record.updatedAt || record.createdAt || "",
         fileSize,
+        expectedSha512: String(record.sha512 || "").trim(),
         downloadUrl,
         fileName,
         downloadedFilePath: alreadyDownloaded ? state.downloadedFilePath : "",
@@ -379,6 +493,7 @@ async function checkForUpdates({ source = "manual" } = {}) {
         isForceUpdate: false,
         releaseDate: "",
         fileSize: null,
+        expectedSha512: "",
         downloadUrl: "",
         fileName: "",
         downloadedFilePath: "",
@@ -395,6 +510,10 @@ async function checkForUpdates({ source = "manual" } = {}) {
   return activeCheckPromise;
 }
 
+/**
+ * 确保下载目录存在，不存在则创建。
+ * @returns {string} 下载目录绝对路径
+ */
 function ensureDownloadDirectory() {
   const downloadDir = path.join(
     app.getPath("userData"),
@@ -406,6 +525,14 @@ function ensureDownloadDirectory() {
   return downloadDir;
 }
 
+/**
+ * 将远程文件下载到本地路径，支持重定向，下载过程中实时更新进度状态。
+ * @param {string} url - 下载地址
+ * @param {string} destination - 本地保存路径
+ * @param {number | null} expectedSize - 预期文件大小（字节），用于进度计算
+ * @param {number} [redirectCount=0] - 当前重定向次数（内部递归使用）
+ * @returns {Promise<string>} 下载完成的本地路径
+ */
 function downloadFile(url, destination, expectedSize, redirectCount = 0) {
   return new Promise((resolve, reject) => {
     const requestUrl = new URL(url);
@@ -493,6 +620,11 @@ function downloadFile(url, destination, expectedSize, redirectCount = 0) {
   });
 }
 
+/**
+ * 计算文件的 SHA-512 哈希值（Base64 编码）。
+ * @param {string} filePath
+ * @returns {Promise<string>}
+ */
 function calculateSha512(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash("sha512");
@@ -504,14 +636,24 @@ function calculateSha512(filePath) {
   });
 }
 
+/**
+ * 下载更新安装包到本地，含文件大小和 SHA-512 校验。
+ * 若已下载且文件完整则直接返回当前状态，不重复下载。
+ * 并发调用时会复用同一个 Promise。
+ * @returns {Promise<typeof state>}
+ */
 async function downloadUpdate() {
   if (activeDownloadPromise) {
     return activeDownloadPromise;
   }
 
   activeDownloadPromise = (async () => {
+    let destination = "";
+
     try {
-      if (state.status !== "available" && state.status !== "downloaded") {
+      if (
+        !["available", "downloaded", "error"].includes(state.status)
+      ) {
         throw new Error("暂无更新可下载");
       }
 
@@ -528,9 +670,11 @@ async function downloadUpdate() {
       }
 
       const downloadDir = ensureDownloadDirectory();
-      const safeFileName =
-        state.fileName || `PrintHelper-${state.latestVersion || "update"}.exe`;
-      const destination = path.join(downloadDir, safeFileName);
+      const safeFileName = buildLocalInstallerFileName(
+        state.latestVersion,
+        state.fileName,
+      );
+      destination = path.join(downloadDir, safeFileName);
 
       if (fs.existsSync(destination)) {
         fs.unlinkSync(destination);
@@ -553,8 +697,7 @@ async function downloadUpdate() {
         }
       }
 
-      const latestRecord = await fetchLatestRecord();
-      const expectedSha512 = String(latestRecord?.sha512 || "").trim();
+      const expectedSha512 = String(state.expectedSha512 || "").trim();
       if (expectedSha512) {
         const actualSha512 = await calculateSha512(destination);
         if (actualSha512 !== expectedSha512) {
@@ -573,8 +716,13 @@ async function downloadUpdate() {
       return getState();
     } catch (error) {
       log.error("Download update failed:", error.message);
+      removeFileIfExists(destination);
+
+      const currentState = getState();
       setState({
         status: "error",
+        downloadedFilePath: "",
+        downloadProgress: 0,
         message: error.message,
       });
       return getState();
@@ -586,32 +734,67 @@ async function downloadUpdate() {
   return activeDownloadPromise;
 }
 
+/**
+ * 启动安装程序并退出当前应用。
+ * 使用 shell.openPath 委托 Windows Shell 启动安装器，
+ * 绕过 Electron Job Object 限制，无需 UAC（用户级安装）。
+ * 并发调用时第二次会直接跳过。
+ * @returns {Promise<true>}
+ * @throws {Error} 安装包不存在或启动失败时抛出
+ */
 async function installUpdate() {
+  if (isInstalling) {
+    log.info("installUpdate called while already installing, skipping.");
+    return true;
+  }
+
   if (!state.downloadedFilePath || !fs.existsSync(state.downloadedFilePath)) {
     throw new Error("下载的安装包未找到");
   }
 
-  log.info(`Launching installer: ${state.downloadedFilePath}`);
+  isInstalling = true;
 
-  // Use shell.openPath to properly trigger Windows UAC elevation
-  // for NSIS installers that require admin privileges (perMachine install)
-  const error = await shell.openPath(state.downloadedFilePath);
-  if (error) {
-    throw new Error(`Failed to launch installer: ${error}`);
+  setState({
+    status: "installing",
+    message: "正在关闭应用并准备启动安装程序，请稍候...",
+  });
+
+  log.info(`Launching installer via shell: ${state.downloadedFilePath}`);
+
+  const { shell } = require("electron");
+
+  // shell.openPath 内部调用 Windows ShellExecuteEx，由 Windows Shell（explorer.exe）
+  // 负责启动安装进程，完全在 Electron 的 Job Object 之外。
+  // 用户级安装（perMachine: false）无需 UAC，可直接执行。
+  const openError = await shell.openPath(state.downloadedFilePath);
+  if (openError) {
+    isInstalling = false;
+    setState({
+      status: "downloaded",
+      message: "安装包已下载完成，可以立即安装",
+    });
+    log.error("Failed to launch installer via shell:", openError);
+    throw new Error(`启动安装程序失败：${openError}`);
   }
 
-  // Mark as quitting immediately so before-quit won't block the exit
+  log.info("Installer launched via shell successfully.");
+
   app.isQuitting = true;
 
-  // Delay quit to ensure the installer process has fully started
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      app.quit();
-      resolve(true);
-    }, 1500);
+  // 用 setImmediate 让当前 IPC 响应先回到渲染进程，
+  // 然后下一个事件循环立即退出。这样 app 在安装器
+  // 做「检测运行中进程」之前就已经退出，不会弹提示框。
+  setImmediate(() => {
+    app.exit(0);
   });
+
+  return true;
 }
 
+/**
+ * 清空下载目录中所有安装包文件。
+ * 通常在应用启动时调用，清理上次更新遗留的安装包。
+ */
 function cleanDownloadDirectory() {
   try {
     const downloadDir = path.join(
