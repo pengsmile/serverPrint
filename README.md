@@ -18,11 +18,9 @@
 - [src/server.js](file:///d:/project/serverPrint/src/server.js)：Socket.io 通信与事件处理
 - [src/printer.js](file:///d:/project/serverPrint/src/printer.js)：打印、查询打印机、打印机状态
 - [src/logger.js](file:///d:/project/serverPrint/src/logger.js)：日志配置
-- [src/renderer/tray.html](file:///d:/project/serverPrint/src/renderer/tray.html)：托盘窗口界面
-- [src/renderer/tray.js](file:///d:/project/serverPrint/src/renderer/tray.js)：托盘窗口脚本
+- [src/renderer/tray.html](file:///d:/project/serverPrint/src/renderer)：托盘窗口界面
 - [test.html](file:///d:/project/serverPrint/test.html)：本地测试页面
 - [assets](file:///d:/project/serverPrint/assets)：应用图标资源
-- [install.js](file:///d:/project/serverPrint/install.js)：系统服务安装脚本（可选）
 
 ## 安装依赖
 
@@ -41,8 +39,10 @@ npm run dev
 ## 打包
 
 ```bash
-npm run build
+npm run build:test
+npm run build:prod
 ```
+环境变量对应 .env.test  .env.production
 
 打包配置在 [package.json](file:///d:/project/serverPrint/package.json) 的 `build` 字段中。
 
@@ -75,17 +75,6 @@ npm run build
 ## 自动启动
 登录后自动启动逻辑在 [index.js](file:///d:/project/serverPrint/src/index.js#L120-L150)，使用 `app.setLoginItemSettings` 设置。
 
-如果需要系统服务方式启动，可使用 [install.js](file:///d:/project/serverPrint/install.js)（需要管理员权限）：
-
-```bash
-node install.js
-```
-
-卸载服务：
-
-```bash
-node install.js --uninstall
-```
 
 ## 日志
 日志默认写入用户目录下的 `logs/main.log`，并按大小滚动（5MB）。

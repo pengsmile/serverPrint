@@ -111,9 +111,8 @@ export default function App() {
       <div className="hero">
         <div>
           <p className="eyebrow">Print Service Console</p>
-          <h1>打印程序</h1>
-          <p className="hero-copy">托盘服务、打印状态和版本更新统一收敛到一个更易维护的界面里。</p>
-          <h1>这是更新后的1.0.2版本</h1>
+          <h1>Print Helper</h1>
+          <p className="hero-copy">打印助手</p>
         </div>
         <div className="hero-pill">服务运行中</div>
       </div>
